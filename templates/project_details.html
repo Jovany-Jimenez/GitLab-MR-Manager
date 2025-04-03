@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Project Details</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/css/diff2html.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/project_details.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="back-link">
+            <a href="/" class="btn btn-outline-secondary">&larr; Back to Projects</a>
+        </div>
+        
+        <h1>{{ project.name }}</h1>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h2 class="card-title">Changes to .gitlab-ci.yml</h2>
+            </div>
+            <div class="card-body">
+                <div id="diff-container" class="diff-container"></div>
+                <!-- Hidden element to hold diff text -->
+                <pre id="diff-text" style="display:none;">{{ project.diff|safe }}</pre>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/js/diff2html.min.js"></script>
+    <script src="{{ url_for('static', filename='js/project_details.js') }}"></script>
+</body>
+</html>

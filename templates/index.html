@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GitLab MR Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.2.3/css/bootstrap.min.css">
+    <!-- Updated diff2html imports -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html/bundles/css/diff2html.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <style>
+        .project-card {
+            margin-bottom: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .project-header {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .project-content {
+            padding: 1rem;
+            border-top: 1px solid #ddd;
+            display: none; /* Hidden by default */
+        }
+        .selected {
+            background-color: #e7f5ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h1 class="mb-4">GitLab MR Manager</h1>
+        
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+        <div class="alert alert-{% if category == 'error' %}danger{% elif category == 'success' %}success{% else %}{{ category }}{% endif %} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title">Scan Projects</h2>
+            </div>
+            <div class="card-body">
+                <form action="/scan" method="post">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" name="target_dir" value="{{ TARGET_DIR }}" placeholder="Directory path containing Git projects">
+                        <button class="btn btn-primary" type="submit">Scan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        {% if projects %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="card-title">Projects with Changes ({{ projects|length }})</h2>
+                <div>
+                    <button id="expand-all-btn" class="btn btn-sm btn-outline-secondary">Expand All</button>
+                    <button id="select-all-btn" class="btn btn-sm btn-outline-primary ms-2">Select All</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <form action="/create_mrs" method="post" id="mr-form">
+                    {% for project in projects %}
+                    <div class="project-card" data-index="{{ loop.index0 }}">
+                        <div class="project-header">
+                            <div class="d-flex align-items-center">
+                                <input type="checkbox" class="form-check-input me-3 project-checkbox" data-id="{{ loop.index0 }}" {% if project.selected %}checked{% endif %}>
+                                <div>
+                                    <h4 class="mb-1">{{ project.name }}</h4>
+                                    {% if project.target_branch %}
+                                    <span class="badge bg-info">Target: {{ project.target_branch }}</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">No default branch detected</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary toggle-diff-btn" data-id="{{ loop.index0 }}">View Changes</button>
+                        </div>
+                        <div class="project-content" id="project-content-{{ loop.index0 }}">
+                            <div class="diff-container" id="diff-container-{{ loop.index0 }}"></div>
+                            <div class="file-container" id="file-container-{{ loop.index0 }}" style="display:none;">
+                                <pre class="file-content"></pre>
+                            </div>
+                        </div>
+                        <!-- Store the diff text in a hidden element -->
+                        <div id="diff-text-{{ loop.index0 }}" style="display:none;">{{ project.diff }}</div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h3>Merge Request Options</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="branch_name" class="form-label">Branch Name</label>
+                                <input type="text" class="form-control" id="branch_name" name="branch_name" value="add-change-management">
+                            </div>
+                            <div class="mb-3">
+                                <label for="commit_message" class="form-label">Commit Message</label>
+                                <input type="text" class="form-control" id="commit_message" name="commit_message" value="Add Change Management integration">
+                            </div>
+                            <div class="mb-3">
+                                <label for="mr_title" class="form-label">MR Title</label>
+                                <input type="text" class="form-control" id="mr_title" name="mr_title" value="Add Change Management integration">
+                            </div>
+                            <div class="mb-3">
+                                <label for="mr_description" class="form-label">MR Description</label>
+                                <textarea class="form-control" id="mr_description" name="mr_description" rows="3">Adding Change Management integration to CI pipeline</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="gitlab_token" class="form-label">GitLab API Token</label>
+                                <input type="password" class="form-control" id="gitlab_token" name="gitlab_token" placeholder="Your GitLab API token">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Merge Requests</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            No projects found. Please scan a directory first.
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Script section -->
+    <script id="projects-data" type="application/json">{{ projects|tojson }}</script>
+    <!-- Updated script imports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/diff2html/bundles/js/diff2html.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded');
+            
+            // Toggle individual diff visibility
+            document.querySelectorAll('.toggle-diff-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    const projectId = this.getAttribute('data-id');
+                    const projectContent = document.getElementById(`project-content-${projectId}`);
+                    const diffContainer = document.getElementById(`diff-container-${projectId}`);
+                    
+                    if (projectContent.style.display === 'none' || !projectContent.style.display) {
+                        // Show diff
+                        projectContent.style.display = 'block';
+                        this.textContent = 'Hide Changes';
+                        
+                        // Render diff if not already rendered
+                        if (diffContainer.children.length === 0) {
+                            renderDiff(projectId);
+                        }
+                    } else {
+                        // Hide diff
+                        projectContent.style.display = 'none';
+                        this.textContent = 'View Changes';
+                    }
+                });
+            });
+            
+            // Expand/collapse all
+            const expandAllBtn = document.getElementById('expand-all-btn');
+            expandAllBtn.addEventListener('click', function() {
+                const isExpanding = this.textContent === 'Expand All';
+                
+                document.querySelectorAll('.toggle-diff-btn').forEach(function(btn) {
+                    const projectId = btn.getAttribute('data-id');
+                    const projectContent = document.getElementById(`project-content-${projectId}`);
+                    const diffContainer = document.getElementById(`diff-container-${projectId}`);
+                    
+                    if (isExpanding) {
+                        // Expand
+                        projectContent.style.display = 'block';
+                        btn.textContent = 'Hide Changes';
+                        
+                        // Render diff if not already rendered
+                        if (diffContainer.children.length === 0) {
+                            renderDiff(projectId);
+                        }
+                    } else {
+                        // Collapse
+                        projectContent.style.display = 'none';
+                        btn.textContent = 'View Changes';
+                    }
+                });
+                
+                this.textContent = isExpanding ? 'Collapse All' : 'Expand All';
+            });
+            
+            // Handle select all button
+            const selectAllBtn = document.getElementById('select-all-btn');
+            selectAllBtn.addEventListener('click', function() {
+                const checkboxes = document.querySelectorAll('.project-checkbox');
+                // Check if all are selected
+                const allSelected = Array.from(checkboxes).every(cb => cb.checked);
+                
+                // Toggle all checkboxes
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = !allSelected;
+                    
+                    // Update server-side selection
+                    const projectId = parseInt(checkbox.getAttribute('data-id'));
+                    fetch('/update_selection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ project_id: projectId, selected: !allSelected })
+                    });
+                });
+                
+                this.textContent = allSelected ? 'Select All' : 'Deselect All';
+            });
+            
+            // Project checkboxes
+            document.querySelectorAll('.project-checkbox').forEach(function(checkbox) {
+                checkbox.addEventListener('change', function() {
+                    const projectId = parseInt(this.getAttribute('data-id'));
+                    const selected = this.checked;
+                    
+                    // Update server-side selection
+                    fetch('/update_selection', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ project_id: projectId, selected: selected })
+                    });
+                });
+            });
+            
+            // Function to render a diff
+            function renderDiff(projectId) {
+                const diffText = document.getElementById(`diff-text-${projectId}`).textContent;
+                const diffContainer = document.getElementById(`diff-container-${projectId}`);
+                
+                const configuration = {
+                    drawFileList: false,
+                    matching: 'lines',
+                    highlight: true,
+                    outputFormat: 'side-by-side'
+                };
+                
+                // Use the correct Diff2Html API (different versions have different APIs)
+                const diffHtml = Diff2Html.html(diffText, configuration);
+                diffContainer.innerHTML = diffHtml;
+                
+                // Apply syntax highlighting if needed
+                if (typeof hljs !== 'undefined') {
+                    document.querySelectorAll(`#diff-container-${projectId} .d2h-code-line-ctn`).forEach(block => {
+                        hljs.highlightElement(block);
+                    });
+                }
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/debug.js') }}"></script>
+</body>
+</html>
